@@ -38,11 +38,13 @@
 
 #ifdef __x86_64__
 #include <emmintrin.h>
+#elif defined(__aarch64__)
+#include "kudu/util/sse2neon.h"
 #endif
 
 #if !defined(__clang__) && defined(__GNUC__) && __GNUC__ < 5
 #define USE_INLINE_ASM_CLMUL
-#else
+#elif !defined(__aarch64__)
 #include <wmmintrin.h>
 #endif
 
@@ -85,7 +87,9 @@ static inline __m128i asm_mm_clmulepi64_si128(__m128i a, __m128i b) {
 // the same masks).
 //
 // This variant depends on the CLMUL instruction.
+#ifndef __aarch64__
 __attribute__((target("pclmul")))
+#endif // __aarch64__
 ATTRIBUTE_NO_SANITIZE_INTEGER
 static zp7_masks_64_t zp7_ppp_64_clmul(uint64_t mask) {
   zp7_masks_64_t r;
