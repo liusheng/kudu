@@ -37,13 +37,20 @@
 #include <iterator>
 #include <memory>
 #include <ostream>
+#include <new>
 #include <string>
 
 #include <glog/logging.h>
 #include <glog/raw_logging.h>
 #ifdef __linux__
 #define UNW_LOCAL_ONLY
+#ifndef __aarch64__
 #include <libunwind.h>
+#else
+#include <bits/types/__sigval_t.h>
+#include <bits/types/siginfo_t.h>
+#include <libunwind-aarch64.h>
+#endif //__aarch64__
 #endif
 
 #include "kudu/gutil/basictypes.h"
