@@ -53,6 +53,8 @@ TEST(InstanceDetectorTest, Basic) {
   // but it takes longer to process a response: it's often turns into a time-out
   // error even if the server responds in a timely manner.
   FLAGS_cloud_metadata_server_request_timeout_ms = 10000;
+#else
+  FLAGS_cloud_metadata_server_request_timeout_ms = 3;
 #endif
   InstanceDetector detector;
   unique_ptr<InstanceMetadata> metadata;

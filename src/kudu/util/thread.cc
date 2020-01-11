@@ -659,18 +659,19 @@ void* Thread::SuperviseThread(void* arg) {
   // already incremented the reference count in StartThread.
   Thread::tls_ = t;
 
-  // Publish our tid to 'tid_', which unblocks any callers waiting in
-  // WaitForTid().
-  Release_Store(&t->tid_, system_tid);
-
   string name = strings::Substitute("$0-$1", t->name(), system_tid);
-  thread_manager->SetThreadName(name, t->tid_);
-  thread_manager->AddThread(pthread_self(), name, t->category(), t->tid_);
+  thread_manager->SetThreadName(name, system_tid);
+  thread_manager->AddThread(pthread_self(), name, t->category(), system_tid);
 
   // FinishThread() is guaranteed to run (even if functor_ throws an
   // exception) because pthread_cleanup_push() creates a scoped object
   // whose destructor invokes the provided callback.
   pthread_cleanup_push(&Thread::FinishThread, t);
+  // Publish our tid to 'tid_', which unblocks any callers waiting in
+  // WaitForTid(). Set tid_ before functor_() at the end of block to avoid race
+  // with thread initialization, like SetThreadName and AddThread.
+  Release_Store(&t->tid_, system_tid);
+
   t->functor_();
   pthread_cleanup_pop(true);
 

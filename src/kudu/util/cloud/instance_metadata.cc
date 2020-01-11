@@ -36,8 +36,8 @@
 // The timeout should be high enough to work effectively, but as low as possible
 // to avoid slowing down detection of running in non-cloud environments. As of
 // now, the metadata servers of major public cloud providers are robust enough
-// to send the response in a fraction of a second.
-DEFINE_uint32(cloud_metadata_server_request_timeout_ms, 1000,
+// to send the response in a fraction of 2 seconds.
+DEFINE_uint32(cloud_metadata_server_request_timeout_ms, 2000,
               "Timeout for HTTP/HTTPS requests to the instance metadata server "
               "(in milliseconds)");
 TAG_FLAG(cloud_metadata_server_request_timeout_ms, advanced);

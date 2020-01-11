@@ -442,7 +442,8 @@ Status WaitForBind(pid_t pid, uint16_t* port,
   // to be the primary service port. When searching, we use the provided bind
   // address if there is any, otherwise we use '*' (same as '0.0.0.0') which
   // matches all addresses on the local machine.
-  string addr_pattern = Substitute("n$0:", (!addr || *addr == "0.0.0.0") ? "*" : *addr);
+  string all_pattern = "n*:";
+  string addr_pattern = (!addr || *addr == "0.0.0.0") ? "" : Substitute("n$0:", *addr);
   MonoTime deadline = MonoTime::Now() + timeout;
   string lsof_out;
   int32_t p = -1;
@@ -454,9 +455,15 @@ Status WaitForBind(pid_t pid, uint16_t* port,
       vector<string> lines = strings::Split(lsof_out, "\n");
       for (int index = 2; index < lines.size(); index += 2) {
         StringPiece cur_line(lines[index]);
-        if (HasPrefixString(cur_line.ToString(), addr_pattern) &&
-            !cur_line.contains("->")) {
-          cur_line.remove_prefix(addr_pattern.size());
+        if (!cur_line.contains("->")) {
+          if (HasPrefixString(cur_line.ToString(), all_pattern)) {
+            cur_line.remove_prefix(all_pattern.size());
+          } else if ((!addr_pattern.empty()) &&
+                      HasPrefixString(cur_line.ToString(), addr_pattern)) {
+            cur_line.remove_prefix(addr_pattern.size());
+          } else {
+            continue;
+          }
           if (!safe_strto32(cur_line.data(), cur_line.size(), &p)) {
             return Status::RuntimeError("unexpected lsof output", lsof_out);
           }
