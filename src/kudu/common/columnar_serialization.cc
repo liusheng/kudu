@@ -17,7 +17,11 @@
 
 #include "kudu/common/columnar_serialization.h"
 
+#ifdef __aarch64__
+#include "kudu/util/sse2neon.h"
+#else //__aarch64__
 #include <immintrin.h>
+#endif
 
 #include <cstring>
 #include <ostream>

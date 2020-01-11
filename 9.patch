@@ -1,0 +1,71 @@
+From cb2c7c09f9477f13e43dd9ad72f79687a330112d Mon Sep 17 00:00:00 2001
+From: kiwik <chenrui.momo@gmail.com>
+Date: Thu, 2 Apr 2020 20:11:27 +0800
+Subject: [PATCH] Apply static linking for ASAN testing on aarch64
+
+ASAN with static linking on aarch64 will cause all of test cases failed,
+add a workaround for Jenkins CI script to avoid it for aarch64 testing.
+Update README to remove the out-of-date info about dynamic linking and
+ASAN to avoid confusion.
+
+Fix KUDU-3101
+
+Change-Id: I29bc8a2d9c66ff9c0e1429c9b45419428ab4afad
+---
+ CMakeLists.txt                          | 2 +-
+ README.adoc                             | 3 +--
+ build-support/jenkins/build-and-test.sh | 7 +++++++
+ 3 files changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d34c8d160..07853a864 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -151,7 +151,7 @@ include(CompilerInfo)
+ 
+ 
+ # compiler flags that are common across debug/release builds
+-execute_process(COMMAND uname -p OUTPUT_VARIABLE ARCH_NAME)
++execute_process(COMMAND uname -m OUTPUT_VARIABLE ARCH_NAME)
+ if ("${ARCH_NAME}" MATCHES "aarch64")
+   # Certain platforms such as ARM do not use signed chars by default
+   # which causes issues with certain bounds checks.
+diff --git a/README.adoc b/README.adoc
+index bad43b2f6..22036a020 100644
+--- a/README.adoc
++++ b/README.adoc
+@@ -384,8 +384,7 @@ linking the kudu binaries and unit tests. The full range of options for `KUDU_LI
+ `static`, `dynamic`, and `auto`. The default is `auto` and only the first letter
+ matters for the purpose of matching.
+ 
+-NOTE: Dynamic linking is incompatible with ASAN and static linking is incompatible
+-with TSAN.
++NOTE: Static linking is incompatible with TSAN.
+ 
+ 
+ == Developing Kudu in Eclipse
+diff --git a/build-support/jenkins/build-and-test.sh b/build-support/jenkins/build-and-test.sh
+index f1d860f05..54df092c6 100755
+--- a/build-support/jenkins/build-and-test.sh
++++ b/build-support/jenkins/build-and-test.sh
+@@ -194,6 +194,7 @@ if [ -n "$BUILD_ID" ]; then
+   trap cleanup EXIT
+ fi
+ 
++ARTIFACT_ARCH=$(uname -m)
+ # Configure the build
+ #
+ # ASAN/TSAN can't build the Python bindings because the exported Kudu client
+@@ -202,6 +203,12 @@ if [ "$BUILD_TYPE" = "ASAN" ]; then
+   USE_CLANG=1
+   CMAKE_BUILD=fastdebug
+   EXTRA_BUILD_FLAGS="-DKUDU_USE_ASAN=1 -DKUDU_USE_UBSAN=1"
++  # workaround for github.com/google/sanitizers/issues/1208
++  # ASAN with dynamic linking cause all of test cases failed on aarch64,
++  # we don't apply ENABLE_DIST_TEST on aarch64, so apply static linking direcly
++  if [ "$ARTIFACT_ARCH" = "aarch64" ]; then
++    EXTRA_BUILD_FLAGS="$EXTRA_BUILD_FLAGS -DKUDU_LINK=static"
++  fi
+   BUILD_PYTHON=0
+   BUILD_PYTHON3=0
+ elif [ "$BUILD_TYPE" = "TSAN" ]; then
