@@ -66,7 +66,7 @@ void CheckStandardFds() {
 
 Status CheckCPUFlags() {
   base::CPU cpu;
-  if (!cpu.has_broken_neon() && cpu.cpu_brand()=="ARM64"){
+  if (!cpu.has_broken_neon() && cpu.cpu_brand()=="ARM64") {
     return Status::OK();
   }
   if (!cpu.has_sse42()) {
