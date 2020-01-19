@@ -456,3 +456,5 @@ on writing code, though it may affect your ability to build from within Eclipse.
 
 This distribution uses cryptographic software and may be subject to export controls.
 Please refer to docs/export_control.adoc for more information.
+
+Test CI
