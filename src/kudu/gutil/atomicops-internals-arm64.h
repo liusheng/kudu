@@ -100,11 +100,13 @@ inline Atomic32 NoBarrier_AtomicExchange(volatile Atomic32* ptr,
 inline Atomic32 Acquire_AtomicExchange(volatile Atomic32* ptr,
                                        Atomic32 new_value) {
   Atomic32 old_val = NoBarrier_AtomicExchange(ptr, new_value);
+  MemoryBarrier();
   return old_val;
 }
 
 inline Atomic32 Release_AtomicExchange(volatile Atomic32* ptr,
                                        Atomic32 new_value) {
+  MemoryBarrier();
   return NoBarrier_AtomicExchange(ptr, new_value);
 }
 
@@ -156,7 +158,6 @@ inline Atomic32 Release_CompareAndSwap(volatile Atomic32* ptr,
 
 inline void NoBarrier_Store(volatile Atomic32* ptr, Atomic32 value) {
   *ptr = value;
-  MemoryBarrier();
 }
 
 inline void Acquire_Store(volatile Atomic32* ptr, Atomic32 value) {
@@ -174,7 +175,6 @@ inline void Release_Store(volatile Atomic32* ptr, Atomic32 value) {
 }
 
 inline Atomic32 NoBarrier_Load(volatile const Atomic32* ptr) {
-  MemoryBarrier();
   return *ptr;
 }
 
@@ -251,11 +251,13 @@ inline void PauseCPU() {
 inline Atomic64 Acquire_AtomicExchange(volatile Atomic64* ptr,
                                        Atomic64 new_value) {
   Atomic64 old_val = NoBarrier_AtomicExchange(ptr, new_value);
+  MemoryBarrier();
   return old_val;
 }
 
 inline Atomic64 Release_AtomicExchange(volatile Atomic64* ptr,
                                        Atomic64 new_value) {
+  MemoryBarrier();
   return NoBarrier_AtomicExchange(ptr, new_value);
 }
 
@@ -309,7 +311,6 @@ inline Atomic64 Release_CompareAndSwap(volatile Atomic64* ptr,
 
 inline void NoBarrier_Store(volatile Atomic64* ptr, Atomic64 value) {
   *ptr = value;
-  MemoryBarrier();
 }
 
 inline void Acquire_Store(volatile Atomic64* ptr, Atomic64 value) {
@@ -327,7 +328,6 @@ inline void Release_Store(volatile Atomic64* ptr, Atomic64 value) {
 }
 
 inline Atomic64 NoBarrier_Load(volatile const Atomic64* ptr) {
-  MemoryBarrier();
   return *ptr;
 }
 
