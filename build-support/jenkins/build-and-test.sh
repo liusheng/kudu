@@ -520,7 +520,7 @@ if [ "$BUILD_JAVA" == "1" ]; then
     fi
   else
     # TODO: Run `gradle check` in BUILD_TYPE DEBUG when static code analysis is fixed
-    if ! ./gradlew $EXTRA_GRADLE_FLAGS clean assemble test $EXTRA_GRADLE_TEST_FLAGS; then
+    if ! ./gradlew $EXTRA_GRADLE_FLAGS clean test $EXTRA_GRADLE_TEST_FLAGS; then
       TESTS_FAILED=1
       FAILURES="$FAILURES"$'Java Gradle build/test failed\n'
     fi
