@@ -55,11 +55,12 @@ IS_IN_GIT=$(test -e ../.git && echo true || :)
 if [ -n "$IS_IN_GIT" ]; then
   # Determine whether this subtree in the git repo has changed since thirdparty
   # was last built.
-  CUR_THIRDPARTY_HASH=$(cd .. && git ls-tree -d HEAD thirdparty | awk '{print $3}')
+  INIT_THIRDPARTY_HASH=$(cd .. && git ls-tree -d HEAD thirdparty | awk '{print $3}')
+  CUR_THIRDPARTY_HASH=$(cd .. && git rev-parse HEAD)
 
   for GROUP in $DEPENDENCY_GROUPS; do
-    LAST_BUILD_HASH=$(cat .build-hash.$GROUP || :)
-    if [ "$CUR_THIRDPARTY_HASH" != "$LAST_BUILD_HASH" ]; then
+    LAST_BUILD_HASH=$(cat .build-hash.$GROUP || echo $INIT_THIRDPARTY_HASH)
+    if ! ( git diff --quiet $LAST_BUILD_HASH $CUR_THIRDPARTY_HASH -- . ) ; then
       echo "Rebuilding thirdparty dependency group '$GROUP': the repository has changed since it was last built."
       echo "Old git hash: $LAST_BUILD_HASH"
       echo "New build hash: $CUR_THIRDPARTY_HASH"
