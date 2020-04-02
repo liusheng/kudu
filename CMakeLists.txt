@@ -151,7 +151,7 @@ include(CompilerInfo)
 
 
 # compiler flags that are common across debug/release builds
-execute_process(COMMAND uname -p OUTPUT_VARIABLE ARCH_NAME)
+execute_process(COMMAND uname -m OUTPUT_VARIABLE ARCH_NAME)
 if ("${ARCH_NAME}" MATCHES "aarch64")
   # Certain platforms such as ARM do not use signed chars by default
   # which causes issues with certain bounds checks.
