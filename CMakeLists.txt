@@ -152,7 +152,7 @@ include(CompilerInfo)
 
 # compiler flags that are common across debug/release builds
 execute_process(COMMAND uname -m OUTPUT_VARIABLE ARCH_NAME)
-if ("${ARCH_NAME}" MATCHES "aarch64")
+if("${ARCH_NAME}" MATCHES "aarch64")
   # Certain platforms such as ARM do not use signed chars by default
   # which causes issues with certain bounds checks.
   set(CXX_COMMON_FLAGS "${CXX_COMMON_FLAGS} -fsigned-char")
@@ -415,11 +415,19 @@ if (${KUDU_USE_TSAN})
   # require all code to be position independent, and the easiest way to
   # guarantee that is via dynamic linking (not all 3rd party archives are
   # compiled with -fPIC e.g. boost).
-  if("${KUDU_LINK}" STREQUAL "a")
-    message("Using dynamic linking for TSAN")
-    set(KUDU_LINK "d")
-  elseif("${KUDU_LINK}" STREQUAL "s")
-    message(SEND_ERROR "Cannot use TSAN with static linking")
+  if(NOT "${ARCH_NAME}" MATCHES "aarch64")
+    if("${KUDU_LINK}" STREQUAL "a")
+      message("Using dynamic linking for TSAN")
+      set(KUDU_LINK "d")
+    elseif("${KUDU_LINK}" STREQUAL "s")
+      message(SEND_ERROR "Cannot use TSAN with static linking")
+    endif()
+  else()
+    # workaround for github.com/google/sanitizers/issues/1208
+    # TSAN with dynamic linking cause all of test cases failed on aarch64,
+    # we don't apply ENABLE_DIST_TEST on aarch64, so apply static linking direcly
+    message("Using static linking for TSAN on aarch64")
+    set(KUDU_LINK "s")
   endif()
 endif()
 
