@@ -26,6 +26,7 @@
 
 #include <cstring>
 #include <ostream>
+#include <string> // IWYU pragma: keep
 #include <vector>
 
 #include <glog/logging.h>
