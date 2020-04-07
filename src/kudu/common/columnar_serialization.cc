@@ -18,7 +18,7 @@
 #include "kudu/common/columnar_serialization.h"
 
 #ifdef __aarch64__
-#include "kudu/util/sse2neon.h"
+#include "kudu/util/sse2neon.h" // IWYU pragma: keep
 #else //__aarch64__
 #include <emmintrin.h>
 #include <immintrin.h>
@@ -26,7 +26,6 @@
 
 #include <cstring>
 #include <ostream>
-#include <string>
 #include <vector>
 
 #include <glog/logging.h>

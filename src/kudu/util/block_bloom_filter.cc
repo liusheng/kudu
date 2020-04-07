@@ -203,6 +203,7 @@ void BlockBloomFilter::BucketInsert(const uint32_t bucket_idx, const uint32_t ha
   }
   for (int i = 0; i < 2; ++i) {
 #ifdef __aarch64__
+    // IWYU pragma: no_include <arm_neon.h>
     uint8x16_t new_bucket_neon = vreinterpretq_u8_u32(vld1q_u32(new_bucket + 4 * i));
     uint8x16_t* existing_bucket = reinterpret_cast<uint8x16_t*>(&directory_[bucket_idx][4 * i]);
     *existing_bucket = vorrq_u8(*existing_bucket, new_bucket_neon);

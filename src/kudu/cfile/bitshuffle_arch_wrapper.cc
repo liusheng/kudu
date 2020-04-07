@@ -35,6 +35,7 @@
 #undef bshuf_decompress_lz4
 
 #include "kudu/gutil/cpu.h"
+// IWYU pragma: no_forward_declare base::CPU
 
 using base::CPU;
 

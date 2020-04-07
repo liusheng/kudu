@@ -43,12 +43,10 @@
 #include <glog/raw_logging.h>
 #ifdef __linux__
 #define UNW_LOCAL_ONLY
-#ifndef __aarch64__
-#include <libunwind.h>
-#else
-#include <bits/types/__sigval_t.h>
-#include <bits/types/siginfo_t.h>
+#ifdef __aarch64__
 #include <libunwind-aarch64.h>
+#else
+#include <libunwind.h>
 #endif //__aarch64__
 #endif
 

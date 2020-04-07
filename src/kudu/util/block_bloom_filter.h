@@ -17,9 +17,7 @@
 
 #pragma once
 
-#ifndef __aarch64__
 #include <algorithm>
-#endif //__aarch64__
 #include <cstddef>
 #include <cstdint>
 #include <limits>
