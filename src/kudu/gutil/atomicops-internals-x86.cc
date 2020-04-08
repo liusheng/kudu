@@ -126,3 +126,4 @@ static void AtomicOps_Internalx86CPUFeaturesInit() {
 
 #endif  // GUTIL_ATOMICOPS_INTERNALS_X86_H_
 #endif // __i386__ || __x86_64__
+
