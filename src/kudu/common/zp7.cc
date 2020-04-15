@@ -42,10 +42,12 @@
 #include "kudu/util/sse2neon.h"
 #endif
 
+#ifndef __aarch64__
 #if !defined(__clang__) && defined(__GNUC__) && __GNUC__ < 5
 #define USE_INLINE_ASM_CLMUL
-#elif !defined(__aarch64__)
+#else
 #include <wmmintrin.h>
+#endif
 #endif
 
 #define N_BITS      (6)
