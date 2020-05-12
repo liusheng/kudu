@@ -1,0 +1,182 @@
+diff --git a/src/stacktrace.cc b/src/stacktrace.cc
+index 7e853d8..193fc03 100644
+--- a/src/stacktrace.cc
++++ b/src/stacktrace.cc
+@@ -162,6 +162,15 @@ struct GetStackImplementation {
+ #define HAVE_GST_win32
+ #endif
+ 
++#if defined(__aarch64__)
++#define STACKTRACE_INL_HEADER "stacktrace_arm64-inl.h"
++#define GST_SUFFIX arm64
++#include "stacktrace_impl_setup-inl.h"
++#undef GST_SUFFIX
++#undef STACKTRACE_INL_HEADER
++#define HAVE_GST_arm64
++#endif
++
+ static GetStackImplementation *all_impls[] = {
+ #ifdef HAVE_GST_libgcc
+   &impl__libgcc,
+@@ -186,6 +195,9 @@ static GetStackImplementation *all_impls[] = {
+ #endif
+ #ifdef HAVE_GST_win32
+   &impl__win32,
++#endif
++#ifdef HAVE_GST_arm64
++  &impl__arm64,
+ #endif
+   NULL
+ };
+@@ -216,6 +228,8 @@ static GetStackImplementation *get_stack_impl = &impl__libgcc;
+ static GetStackImplementation *get_stack_impl = &impl__generic;
+ #elif defined(HAVE_GST_arm)
+ static GetStackImplementation *get_stack_impl = &impl__arm;
++#elif defined(HAVE_GST_arm64)
++static GetStackImplementation *get_stack_impl = &impl__arm64;
+ #elif 0
+ // This is for the benefit of code analysis tools that may have
+ // trouble with the computed #include above.
+@@ -225,6 +239,7 @@ static GetStackImplementation *get_stack_impl = &impl__arm;
+ # include "stacktrace_powerpc-inl.h"
+ # include "stacktrace_win32-inl.h"
+ # include "stacktrace_arm-inl.h"
++# include "straktrace_arm64-inl.h"
+ # include "stacktrace_instrument-inl.h"
+ #else
+ #error Cannot calculate stack trace: will need to write for your environment
+diff --git a/src/stacktrace_arm64-inl.h b/src/stacktrace_arm64-inl.h
+new file mode 100644
+index 0000000..0586fcb
+--- /dev/null
++++ b/src/stacktrace_arm64-inl.h
+@@ -0,0 +1,129 @@
++// Copyright (c) 2007, Google Inc.
++// All rights reserved.
++//
++// Redistribution and use in source and binary forms, with or without
++// modification, are permitted provided that the following conditions are
++// met:
++//
++//     * Redistributions of source code must retain the above copyright
++// notice, this list of conditions and the following disclaimer.
++//     * Redistributions in binary form must reproduce the above
++// copyright notice, this list of conditions and the following disclaimer
++// in the documentation and/or other materials provided with the
++// distribution.
++//     * Neither the name of Google Inc. nor the names of its
++// contributors may be used to endorse or promote products derived from
++// this software without specific prior written permission.
++//
++// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++//
++// Author: Craig Silverstein
++//
++// Produce stack trace.  I'm guessing (hoping!) the code is much like
++// for x86.  For apple machines, at least, it seems to be; see
++//    http://developer.apple.com/documentation/mac/runtimehtml/RTArch-59.html
++//    http://www.linux-foundation.org/spec/ELF/ppc64/PPC-elf64abi-1.9.html#STACK
++// Linux has similar code: http://patchwork.ozlabs.org/linuxppc/patch?id=8882
++#ifndef BASE_STACKTRACE_ARM64_INL_H_
++#define BASE_STACKTRACE_ARM64_INL_H_
++
++#include <stdio.h>
++#include <stdint.h>   // for uintptr_t
++#include "gperftools/stacktrace.h"
++#include "base/basictypes.h"
++
++
++// Given a pointer to a stack frame, locate and return the calling
++// stackframe, or return NULL if no stackframe can be found. Perform sanity
++// checks (the strictness of which is controlled by the boolean parameter
++// "STRICT_UNWINDING") to reduce the chance that a bad pointer is returned.
++template<bool STRICT_UNWINDING>
++static void **NextStackFrame(void **old_sp) {
++  void **new_sp = (void**) old_sp[0];
++
++  // Check that the transition from frame pointer old_sp to frame
++  // pointer new_sp isn't clearly bogus
++  if (STRICT_UNWINDING) {
++    // With the stack growing downwards, older stack frame must be
++    // at a greater address that the current one.
++    if (new_sp <= old_sp) return NULL;
++    // Assume stack frames larger than 100,000 bytes are bogus.
++    if ((uintptr_t)new_sp - (uintptr_t)old_sp > 100000) return NULL;
++  } else {
++    // In the non-strict mode, allow discontiguous stack frames.
++    // (alternate-signal-stacks for example).
++    if (new_sp == old_sp) return NULL;
++    // And allow frames upto about 1MB.
++    if ((new_sp > old_sp)
++        && ((uintptr_t)new_sp - (uintptr_t)old_sp > 1000000)) return NULL;
++  }
++  if ((uintptr_t)new_sp & (sizeof(void *) - 1)) return NULL;
++  return new_sp;
++}
++
++// This ensures that GetStackTrace stes up the Link Register properly.
++#ifdef __GNUC__
++void StacktraceArm64DummyFunction() __attribute__((noinline));
++void StacktraceArm64DummyFunction() { __asm__ volatile(""); }
++#else
++# error StacktraceArm64DummyFunction() needs to be ported to this platform.
++#endif
++#endif
++
++static int GET_STACK_TRACE_OR_FRAMES {
++#ifdef __GNUC__
++  void **sp = reinterpret_cast<void**>(__builtin_frame_address(0));
++#else
++# error reading stack point not yet supported on this platform.
++#endif
++
++  // On ARM, the return address is stored in the link register (r14).
++  // This is not saved on the stack frame of a leaf function.  To
++  // simplify code that reads return addresses, we call a dummy
++  // function so that the return address of this function is also
++  // stored in the stack frame.  This works at least for gcc.
++  StacktraceArm64DummyFunction();
++
++  skip_count++; // skip parent frame due to indirection in stacktrace.cc
++
++  int n = 0;
++  while (sp && n < max_depth) {
++    // The GetStackFrames routine is called when we are in some
++    // informational context (the failure signal handler for example).
++    // Use the non-strict unwinding rules to produce a stack trace
++    // that is as complete as possible (even if it contains a few bogus
++    // entries in some rare cases).
++    void **next_sp = NextStackFrame<IS_STACK_FRAMES == 0>(sp);
++
++    if (skip_count > 0) {
++      skip_count--;
++    } else {
++      result[n] = *sp;
++
++#if IS_STACK_FRAMES
++      if (next_sp > sp) {
++        sizes[n] = (uintptr_t)next_sp - (uintptr_t)sp;
++      } else {
++        // A frame-size of 0 is used to indicate unknown frame size.
++        sizes[n] = 0;
++      }
++#endif
++      n++;
++    }
++    sp = next_sp;
++  }
++  return n;
++}
++
++
++
