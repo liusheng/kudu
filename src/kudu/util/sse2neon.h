@@ -17,6 +17,7 @@
 //   Mark Cheng <marktwtn@biilabs.io>
 //   Malcolm James MacLeod <malcolm@gulden.com>
 //   Devin Hussey (easyaspi314) <husseydevin@gmail.com>
+//   Sebastian Pop <spop@amazon.com>
 
 /*
  * The MIT license:
@@ -180,7 +181,7 @@ typedef union ALIGN_STRUCT(16) SIMDVec {
 
 // Older gcc does not define vld1q_u8_x4 type
 #if defined(__GNUC__) && !defined(__clang__)
-#if __GNUC__ < 9 || (__GNUC__ == 9 && (__GNUC_MINOR__ <= 2))
+#if __GNUC__ <= 9
 FORCE_INLINE uint8x16x4_t vld1q_u8_x4(const uint8_t *p) {
   uint8x16x4_t ret;
   ret.val[0] = vld1q_u8(p + 0);
@@ -240,6 +241,14 @@ FORCE_INLINE __m128 _mm_set_ps1(float _w) {
 // https://msdn.microsoft.com/en-us/library/vstudio/afh0zf75(v=vs.100).aspx
 FORCE_INLINE __m128 _mm_set_ps(float w, float z, float y, float x) {
   float __attribute__((aligned(16))) data[4] = {x, y, z, w};
+  return vreinterpretq_m128_f32(vld1q_f32(data));
+}
+
+// Copy single-precision (32-bit) floating-point element a to the lower element
+// of dst, and zero the upper 3 elements.
+// https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_set_ss&expand=4901,4895,4901
+FORCE_INLINE __m128 _mm_set_ss(float a) {
+  float __attribute__((aligned(16))) data[4] = {a, 0, 0, 0};
   return vreinterpretq_m128_f32(vld1q_f32(data));
 }
 
@@ -415,11 +424,20 @@ FORCE_INLINE void _mm_storel_epi64(__m128i *a, __m128i b) {
 // Stores the lower two single-precision floating point values of a to the
 // address p.
 //
-//   *p0 := b0
-//   *p1 := b1
+//   *p0 := a0
+//   *p1 := a1
 //
 // https://msdn.microsoft.com/en-us/library/h54t98ks(v=vs.90).aspx
 FORCE_INLINE void _mm_storel_pi(__m64 *p, __m128 a) { *p = vget_low_f32(a); }
+
+// Stores the upper two single-precision, floating-point values of a to the
+// address p.
+//
+//   *p0 := a2
+//   *p1 := a3
+//
+// https://msdn.microsoft.com/en-us/library/a7525fs8(v%3dvs.90).aspx
+FORCE_INLINE void _mm_storeh_pi(__m64 *p, __m128 a) { *p = vget_high_f32(a); }
 
 // Loads a single single-precision, floating-point value, copying it into all
 // four words
@@ -440,9 +458,24 @@ FORCE_INLINE __m128 _mm_load1_ps(const float *p) {
 //   r3 := a3
 //
 // https://msdn.microsoft.com/en-us/library/s57cyak2(v=vs.100).aspx
-FORCE_INLINE __m128 _mm_loadl_pi(__m128 a, __m64 const *b) {
+FORCE_INLINE __m128 _mm_loadl_pi(__m128 a, __m64 const *p) {
   return vreinterpretq_m128_f32(
-      vcombine_f32(vld1_f32((const float32_t *)b), vget_high_f32(a)));
+      vcombine_f32(vld1_f32((const float32_t *)p), vget_high_f32(a)));
+}
+
+// Sets the upper two single-precision, floating-point values with 64
+// bits of data loaded from the address p; the lower two values are passed
+// through from a.
+//
+//   r0 := a0
+//   r1 := a1
+//   r2 := *p0
+//   r3 := *p1
+//
+// https://msdn.microsoft.com/en-us/library/w92wta0x(v%3dvs.100).aspx
+FORCE_INLINE __m128 _mm_loadh_pi(__m128 a, __m64 const *p) {
+  return vreinterpretq_m128_f32(
+      vcombine_f32(vget_low_f32(a), vld1_f32((const float32_t *)p)));
 }
 
 // Loads four single-precision, floating-point values.
@@ -1357,6 +1390,23 @@ FORCE_INLINE __m128i _mm_srai_epi16(__m128i a, int count) {
     ret;                                                                   \
   })
 
+// Shifts the 8 signed or unsigned 16-bit integers in a left by count bits while
+// shifting in zeros.
+//
+//   r0 := a0 << count
+//   r1 := a1 << count
+//   ...
+//   r7 := a7 << count
+//
+// https://msdn.microsoft.com/en-us/library/c79w388h(v%3dvs.90).aspx
+FORCE_INLINE __m128i _mm_sll_epi16(__m128i a, __m128i count) {
+  uint64_t c = ((SIMDVec *)&count)->m128_u64[0]; //NOLINT
+  if (c > 15) return _mm_setzero_si128();
+
+  int16x8_t vc = vdupq_n_s16((int16_t)c);
+  return vreinterpretq_m128i_s16(vshlq_s16(vreinterpretq_s16_m128i(a), vc));
+}
+
 // NEON does not provide a version of this function.
 // Creates a 16-bit mask from the most significant bits of the 16 signed or
 // unsigned 8-bit integers in a and zero extends the upper bits.
@@ -1447,7 +1497,8 @@ FORCE_INLINE int _mm_movemask_epi8(__m128i a) {
 FORCE_INLINE int _mm_movemask_ps(__m128 a) {
   // Uses the exact same method as _mm_movemask_epi8, see that for details
   uint32x4_t input = vreinterpretq_u32_m128(a);
-  // Shift out everything but the sign bits with a 32-bit unsigned shift right.
+  // Shift out everything but the sign bits with a 32-bit unsigned shift
+  // right.
   uint64x2_t high_bits = vreinterpretq_u64_u32(vshrq_n_u32(input, 31));
   // Merge the two pairs together with a 64-bit unsigned shift right + add.
   uint8x16_t paired =
@@ -1652,6 +1703,34 @@ FORCE_INLINE __m128i _mm_sign_epi32(__m128i _a, __m128i _b) {
   // res = masked & (~zeroMask)
   int32x4_t res = vbicq_s32(masked, zeroMask);
   return vreinterpretq_m128i_s32(res);
+}
+
+// Computes the average of the 16 unsigned 8-bit integers in a and the 16
+// unsigned 8-bit integers in b and rounds.
+//
+//   r0 := (a0 + b0) / 2
+//   r1 := (a1 + b1) / 2
+//   ...
+//   r15 := (a15 + b15) / 2
+//
+// https://msdn.microsoft.com/en-us/library/vstudio/8zwh554a(v%3dvs.90).aspx
+FORCE_INLINE __m128i _mm_avg_epu8(__m128i a, __m128i b) {
+  return vreinterpretq_m128i_u8(
+      vrhaddq_u8(vreinterpretq_u8_m128i(a), vreinterpretq_u8_m128i(b)));
+}
+
+// Computes the average of the 8 unsigned 16-bit integers in a and the 8
+// unsigned 16-bit integers in b and rounds.
+//
+//   r0 := (a0 + b0) / 2
+//   r1 := (a1 + b1) / 2
+//   ...
+//   r7 := (a7 + b7) / 2
+//
+// https://msdn.microsoft.com/en-us/library/vstudio/y13ca3c8(v=vs.90).aspx
+FORCE_INLINE __m128i _mm_avg_epu16(__m128i a, __m128i b) {
+  return (__m128i)vrhaddq_u16(vreinterpretq_u16_m128i(a),
+                              vreinterpretq_u16_m128i(b));
 }
 
 // Adds the four single-precision, floating-point values of a and b.
@@ -2123,9 +2202,13 @@ FORCE_INLINE __m128 _mm_hadd_ps(__m128 a, __m128 b) {
 FORCE_INLINE __m128i _mm_hadd_epi16(__m128i _a, __m128i _b) {
   int16x8_t a = vreinterpretq_s16_m128i(_a);
   int16x8_t b = vreinterpretq_s16_m128i(_b);
+#if defined(__aarch64__)
+  return vreinterpretq_m128i_s16(vpaddq_s16(a, b));
+#else
   return vreinterpretq_m128i_s16(
       vcombine_s16(vpadd_s16(vget_low_s16(a), vget_high_s16(a)),
                    vpadd_s16(vget_low_s16(b), vget_high_s16(b))));
+#endif
 }
 
 // Computes pairwise difference of each argument as a 16-bit signed or unsigned
@@ -2304,6 +2387,20 @@ FORCE_INLINE __m128i _mm_cmplt_epi8(__m128i a, __m128i b) {
 FORCE_INLINE __m128i _mm_cmpgt_epi8(__m128i a, __m128i b) {
   return vreinterpretq_m128i_u8(
       vcgtq_s8(vreinterpretq_s8_m128i(a), vreinterpretq_s8_m128i(b)));
+}
+
+// Compares the 8 signed 16-bit integers in a and the 8 signed 16-bit integers
+// in b for less than.
+//
+//   r0 := (a0 < b0) ? 0xffff : 0x0
+//   r1 := (a1 < b1) ? 0xffff : 0x0
+//   ...
+//   r7 := (a7 < b7) ? 0xffff : 0x0
+//
+// https://technet.microsoft.com/en-us/library/t863edb2(v=vs.100).aspx
+FORCE_INLINE __m128i _mm_cmplt_epi16(__m128i a, __m128i b) {
+  return vreinterpretq_m128i_u16(
+      vcltq_s16(vreinterpretq_s16_m128i(a), vreinterpretq_s16_m128i(b)));
 }
 
 // Compares the 8 signed 16-bit integers in a and the 8 signed 16-bit integers
@@ -2712,6 +2809,36 @@ FORCE_INLINE __m128i _mm_loadu_si128(const __m128i *p) {
 // ******************************************
 // Miscellaneous Operations
 // ******************************************
+
+// Shifts the 8 signed 16-bit integers in a right by count bits while shifting
+// in the sign bit.
+//
+//   r0 := a0 >> count
+//   r1 := a1 >> count
+//   ...
+//   r7 := a7 >> count
+//
+// https://msdn.microsoft.com/en-us/library/3c9997dk(v%3dvs.90).aspx
+FORCE_INLINE __m128i _mm_sra_epi16(__m128i a, __m128i count) {
+  int64_t c = (int64_t)vget_low_s64((int64x2_t)count);
+  if (c > 15) return _mm_cmplt_epi16(a, _mm_setzero_si128());
+  return vreinterpretq_m128i_s16(vshlq_s16((int16x8_t)a, vdupq_n_s16(-c)));
+}
+
+// Shifts the 4 signed 32-bit integers in a right by count bits while shifting
+// in the sign bit.
+//
+//   r0 := a0 >> count
+//   r1 := a1 >> count
+//   r2 := a2 >> count
+//   r3 := a3 >> count
+//
+// https://msdn.microsoft.com/en-us/library/ce40009e(v%3dvs.100).aspx
+FORCE_INLINE __m128i _mm_sra_epi32(__m128i a, __m128i count) {
+  int64_t c = (int64_t)vget_low_s64((int64x2_t)count);
+  if (c > 31) return _mm_cmplt_epi32(a, _mm_setzero_si128());
+  return vreinterpretq_m128i_s32(vshlq_s32((int32x4_t)a, vdupq_n_s32(-c)));
+}
 
 // Packs the 16 signed 16-bit integers from a and b into 8-bit integers and
 // saturates.
@@ -3276,6 +3403,19 @@ FORCE_INLINE void _mm_clflush(void const *p) {
   (void)p;
   // no corollary for Neon?
 }
+
+// Allocate aligned blocks of memory.
+// https://software.intel.com/en-us/
+//         cpp-compiler-developer-guide-and-reference-allocating-and-freeing-aligned-memory-blocks
+FORCE_INLINE void *_mm_malloc(size_t size, size_t align) {
+  void *ptr;
+  if (align == 1) return malloc(size);
+  if (align == 2 || (sizeof(void *) == 8 && align == 4)) align = sizeof(void *);
+  if (!posix_memalign(&ptr, align, size)) return ptr;
+  return NULL;
+}
+
+FORCE_INLINE void _mm_free(void *addr) { free(addr); }
 
 #if defined(__GNUC__) || defined(__clang__)
 #pragma pop_macro("ALIGN_STRUCT")
